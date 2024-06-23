@@ -17,7 +17,7 @@ const blockCommentEndRegex = /^(.*?)\s*\*\/.*$/
 const includeLineRegex = /^include[\s]+"([^"]+)".*$/i
 const spacerRegex = /^\s*(.)\1{3,}\s*$/
 const labelDefinitionRegex = /^\s*((?:[A-Z_][\w#@]*)?(?:(?:\.[\w#@]*:{0,2})|(?:[A-Z_][\w#@]*:{1,2})))/i
-const defineExpressionRegex = /^\s*(?:def\s*)?([A-Z_][\w#@]*)\s+(?:(?:equ|equs|set|=)\s+.+|(?:rb|rw|rl)(?:\s+.*)?)$/i
+const defineExpressionRegex = /^\s*(?:def\s*)?([A-Z_][\w#@]*)\s+(?:(equ|equs|set|=|[+\-*\/\%<>&|^]+=|r[a-z]+)\s+.+|(?:rb|rw|rl)(?:\s+.*)?)$/i
 const instructionRegex = new RegExp(`^(${syntaxInfo.instructions.join("|")})\\b`, "i");
 const keywordRegex = new RegExp(`^(${syntaxInfo.preprocessorKeywords.join("|")})\\b`, "i");
 const macroDefinitionRegex = /^\s*macro[\s]+([A-Z_][\w#@]*).*$/i
@@ -27,7 +27,7 @@ class ScopeDescriptor {
 }
 
 class SymbolDescriptor {
-  constructor(public location: vscode.Location, public isExported: boolean, public isLocal: boolean, public kind: vscode.SymbolKind, public scope?: ScopeDescriptor, public documentation?: string) { }
+  constructor(public location: vscode.Location, public isExported: boolean, public isLocal: boolean, public kind: vscode.SymbolKind, public scope?: ScopeDescriptor, public documentation?: string, public defineType?: DefineType) { }
 }
 
 class IncludeDescriptor {
@@ -59,6 +59,13 @@ enum SearchMode {
   globals,
   includes,
   parents
+}
+
+export enum DefineType {
+  Variable,
+  NumericConstant,
+  OffsetConstant,
+  StringConstant
 }
 
 export class ASMSymbolDocumenter {
@@ -389,6 +396,18 @@ export class ASMSymbolDocumenter {
             }
           }
 
+          let defineType: DefineType | undefined = undefined;
+          if (defineMatch) {
+            if (defineMatch[2] == "equ") {
+              defineType = DefineType.NumericConstant;
+            } else if (defineMatch[2] == "equs") {
+              defineType = DefineType.StringConstant;
+            } else if (defineMatch[2] == "rb") {
+              defineType = DefineType.OffsetConstant;
+            } else {
+              defineType = DefineType.Variable;
+            }
+          }
           if (defineExpressionRegex.test(line.text)) {
             const trimmed = line.text.replace(/[\s]+/g, " ");
             const withoutComment = trimmed.replace(/;.*$/, "");
@@ -399,7 +418,7 @@ export class ASMSymbolDocumenter {
             documentation = commentBuffer.join("\n");
           }
 
-          table.symbols[name] = new SymbolDescriptor(location, isExported, isLocal, isFunction ? vscode.SymbolKind.Function : vscode.SymbolKind.Constant, currentScope, documentation);
+          table.symbols[name] = new SymbolDescriptor(location, isExported, isLocal, isFunction ? vscode.SymbolKind.Function : vscode.SymbolKind.Constant, currentScope, documentation, defineType);
         }
 
         if (hadBlockComment == false && isInBlockComment == false) {
