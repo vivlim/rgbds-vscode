@@ -222,7 +222,13 @@ export class ASMSymbolDocumenter {
         const globalFileBasename = path.basename(filename);
         const globalFileDirname = path.dirname(filename);
 
-        this._seekSymbols(globalFileBasename, globalFileDirname, output, [], SearchMode.globals);
+        // HACK: If there's an includes.asm in the workspace, search it for includes
+        if (globalFileBasename === "includes.asm") {
+          this._seekSymbols(globalFileBasename, globalFileDirname, output, [], SearchMode.includes);
+        }
+        else {
+          this._seekSymbols(globalFileBasename, globalFileDirname, output, [], SearchMode.globals);
+        }
       }
     }
 
